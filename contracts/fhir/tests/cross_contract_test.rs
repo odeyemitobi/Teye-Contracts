@@ -13,13 +13,11 @@
 extern crate std;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, testutils::Address as _, vec, Address, Bytes, Env,
-    String,
+    contract, contracterror, contractimpl, panic_with_error, testutils::Address as _, vec, Address,
+    Bytes, Env, String,
 };
 
-use crate::FhirContract;
-use crate::FhirContractClient;
-use crate::FhirError;
+use fhir::{FhirContract, FhirContractClient, FhirError};
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Mock "Registry" contract – simulates the external dependency that the FHIR
@@ -46,9 +44,9 @@ impl MockRegistryContract {
     /// Happy-path: returns a deterministic record bytes payload.
     pub fn get_record(env: Env, record_id: u64) -> Bytes {
         // A trivially recognisable payload for assertion checks.
-        let mut payload = Bytes::new(&env);
-        payload.push(record_id as u8);
-        payload
+        let mut data_arr = [0u8; 1];
+        data_arr[0] = record_id as u8;
+        Bytes::from_array(&env, &data_arr)
     }
 
     /// Failure-path: always reverts, simulating a downstream outage.
@@ -177,7 +175,7 @@ fn test_cross_contract_external_failure_propagated() {
     let result = fhir_client.try_fetch_and_store_record(&99_u64);
     assert_eq!(
         result,
-        Err(Ok(FhirError::ExternalCallFailed)),
+        Err(Ok(FhirError::ExternalCallFailed.into())),
         "FHIR contract must surface ExternalCallFailed when the registry reverts"
     );
 }
@@ -204,7 +202,7 @@ fn test_cross_contract_no_partial_state_on_failure() {
     let result = fhir_client.try_get_record(&record_id);
     assert_eq!(
         result,
-        Err(Ok(FhirError::RecordNotFound)),
+        Err(Ok(FhirError::RecordNotFound.into())),
         "No record must be persisted after a failed cross-contract call"
     );
 }
@@ -228,7 +226,7 @@ fn test_cross_contract_empty_payload_rejected() {
     let result = fhir_client.try_fetch_and_store_record(&1_u64);
     assert_eq!(
         result,
-        Err(Ok(FhirError::InvalidRecordData)),
+        Err(Ok(FhirError::InvalidRecordData.into())),
         "FHIR contract must reject empty payloads from the registry"
     );
 }
@@ -269,7 +267,7 @@ fn test_cross_contract_duplicate_fetch_idempotent() {
     // Second fetch – must not panic.
     let result = fhir_client.try_fetch_and_store_record(&record_id);
     assert!(
-        result.is_ok() || result == Err(Ok(FhirError::RecordAlreadyExists)),
+        result.is_ok() || result == Err(Ok(FhirError::RecordAlreadyExists.into())),
         "Duplicate fetch must either succeed idempotently or return RecordAlreadyExists"
     );
 
