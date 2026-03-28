@@ -91,4 +91,8 @@ impl DelegationContract {
     pub fn get_executor_info(env: Env, executor: Address) -> Option<executor::ExecutorInfo> {
         executor::get_executor(&env, executor)
     }
+
+    pub fn get_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&ADMIN)
+    }
 }
